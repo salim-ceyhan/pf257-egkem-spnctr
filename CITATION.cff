@@ -1,0 +1,8 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it."
+title: "PF257-EGKEM-SPNCTR: Image encryption experiment suite"
+authors:
+  - family-names: "Ceyhan"
+    given-names: "Salim"
+date-released: "2026-02-05"
+license: "MIT"

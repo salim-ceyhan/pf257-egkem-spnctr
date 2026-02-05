@@ -1,0 +1,7 @@
+numpy
+pandas
+Pillow
+cryptography
+pycryptodome
+matplotlib
+XlsxWriter
