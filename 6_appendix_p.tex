@@ -1,0 +1,1105 @@
+%============================================================
+% Appendix (layout settings kept local to appendix)
+%============================================================
+\appendix
+\captionsetup{font=footnotesize}
+\setlength{\tabcolsep}{6pt}
+
+% --- Advantage / security notation ---
+\newcommand{\Adv}{\mathsf{Adv}}
+\newcommand{\indcpa}{\mathsf{IND\text{-}CPA}}
+\newcommand{\prf}{\mathsf{PRF}}
+\newcommand{\prg}{\mathsf{PRG}}
+\newcommand{\Col}{\mathsf{Col}}
+
+%============================================================
+\section{Asymptotic complexity analysis}
+\label{app:comp.anly}
+
+This appendix summarizes asymptotic costs. Decryption has the same order as encryption.
+Let the padded working grid be $H_p\times W_p$ and define $N\triangleq H_pW_p$ processed symbols.
+Let the block side be $b_s$ and $N_b\triangleq N/b_s^2$ blocks. Bounds are stated for fixed protocol
+parameters and fixed $b_s$.
+
+\subsection{Time complexity}
+
+Each stage performs a constant number of full scans over $N$ symbols, or a scan over $N_b$ blocks
+with $\Theta(1)$ work per block for fixed $b_s$:
+(i) pixel-layer substitution--diffusion: $\Theta(N)$;
+(ii) padding, lifting, and blockization: $\Theta(N)$;
+(iii) affine block mapping: $\Theta(N_b)\cdot\Theta(b_s^2)=\Theta(N)$;
+(iv) field-stream generation, masking, serialization, and EtM tagging: $\Theta(N)$ under the adopted packet format.
+Hence,
+\[
+T_{\mathrm{enc}}(N)=\Theta(N),\qquad
+T_{\mathrm{dec}}(N)=\Theta(N).
+\]
+
+\subsection{Space complexity}
+
+The implementation stores a constant number of pixel- and field-domain arrays and buffers of total
+size linear in $N$ (e.g., padded field state, mask, and serialized payload). Keys, headers, counters,
+and wrapped parameters are $\Theta(1)$. Thus,
+\[
+S_{\mathrm{enc}}(N)=\Theta(N),\qquad
+S_{\mathrm{dec}}(N)=\Theta(N).
+\]
+
+%============================================================
+\section{Scoped confidentiality of the field-masked core (LoR/IND-style)}
+\label{snote:indcpa_proof}
+
+This appendix formalizes a scoped confidentiality statement for the isolated masked field-domain core.
+It does not claim indistinguishability for the full packetized protocol, which additionally includes
+canonical parsing/serialization, associated-data binding, and packet-boundary enforcement via EtM
+under verify-then-decrypt.
+
+Fix padded dimensions and let $n \triangleq H_pW_p$. Let $p=257$ and $\Fpf=\mathbb{F}_p$.
+Let $T_K:\mathcal{M}\rightarrow \Fpf^{n}$ denote the deterministic keyed preprocessing map that
+subsumes: (i) the pixel-layer transform, (ii) padding/lifting into $\Fpf$, and (iii) the invertible
+block--field mapping. The masked core output is
+\begin{equation}
+\label{eq:enc_core_indcpa_supp}
+C \;=\; T_K(I)\;+\;R_{K_{\mathrm{str}}}(\nu)\pmod{p},
+\end{equation}
+where $\nu\in\{0,1\}^{64}$ is a nonce and $R_{K_{\mathrm{str}}}(\nu)\in\Fpf^{n}$ is a position-indexed
+stream derived from a PRF/PRG keyed by $K_{\mathrm{str}}$.
+
+\subsection{Nonce-respecting LoR/IND experiment for the isolated core}
+\label{subsec:app_lor_exp}
+
+An adversary $\mathcal{A}$ has oracle access to $\mathsf{Enc}(\cdot,\cdot)$ returning
+\eqref{eq:enc_core_indcpa_supp}. Queries may be adaptive, under nonce uniqueness.
+
+In the challenge, $\mathcal{A}$ submits $I_0,I_1\in\mathcal{M}$ and a fresh nonce $\nu^\star$ not used
+before. The challenger samples $b\gets\{0,1\}$ and returns
+\[
+C^\star \gets T_K(I_b) + R_{K_{\mathrm{str}}}(\nu^\star)\pmod{p}.
+\]
+$\mathcal{A}$ outputs $b'$, and
+\[
+\Adv_{\mathcal{A}}
+\triangleq
+\left|\Pr[b'=b]-\tfrac{1}{2}\right|.
+\]
+
+\subsection{Assumptions}
+\label{subsec:app_lor_assumptions}
+
+(A1) \textbf{PRF-derived stream in $\Fpf^n$.}
+The mapping $\nu \mapsto R_{K_{\mathrm{str}}}(\nu)\in\Fpf^n$ is a PRF over distinct nonces; i.e.,
+$\{R_{K_{\mathrm{str}}}(\nu)\}_{\nu}$ is computationally indistinguishable from independent uniform
+samples in $\Fpf^n$.
+
+(A2) \textbf{Nonce-unique use.}
+Nonces are not reused under a fixed $K_{\mathrm{str}}$.
+
+\subsection{Theorem}
+\label{subsec:app_lor_thm}
+
+Under (A1)--(A2), the masked core \eqref{eq:enc_core_indcpa_supp} achieves nonce-respecting LoR/IND-style
+confidentiality. For any efficient $\mathcal{A}$ making at most $q$ encryption queries (including the
+challenge), there exists an efficient distinguisher $\mathcal{D}$ such that
+\begin{equation}
+\label{eq:indcpa_bound}
+\Adv_{\mathcal{A}}
+\;\le\;
+\Adv^{\prf}_{\mathcal{D}}
+\;+\;
+\Pr[\Col_q],
+\end{equation}
+where $\Col_q$ is the event of a nonce collision among the $q$ queries. Under enforced nonce uniqueness,
+$\Pr[\Col_q]=0$. If nonces are sampled uniformly from $\{0,1\}^{64}$ without stateful checking, then
+$\Pr[\Col_q]\le \frac{q(q-1)}{2^{65}}$.
+
+\subsection{Proof}
+\label{subsec:app_lor_proof}
+
+\textbf{Hybrid H0 (real).} Responses use $R_{K_{\mathrm{str}}}(\nu)$ as in \eqref{eq:enc_core_indcpa_supp}.
+
+\textbf{Hybrid H1 (ideal mask).} For each fresh nonce $\nu$, replace $R_{K_{\mathrm{str}}}(\nu)$ by an
+independent uniform $U(\nu)\gets \Fpf^n$ and answer $C=T_K(I)+U(\nu)\pmod{p}$. On repeated nonces, reuse
+the same $U(\nu)$.
+
+\textbf{H0 $\approx$ H1.} By (A1), any distinguisher between H0 and H1 yields a PRF distinguisher
+$\mathcal{D}$ with advantage $\Adv^{\prf}_{\mathcal{D}}$, plus $\Pr[\Col_q]$ to account for collisions if
+nonce uniqueness is not enforced.
+
+\textbf{H1 gives zero LoR advantage.} For any fixed $I$, let $M=T_K(I)\in\Fpf^n$. In H1, $C=M+U\pmod{p}$
+with $U$ uniform in $\Fpf^n$. Addition by a uniform group element is a bijection on $\Fpf^n$, hence $C$ is
+uniform and independent of $M$. Therefore the challenge distribution is identical for $I_0$ and $I_1$,
+implying $\Pr[b'=b]=\tfrac12$ and $\Adv_{\mathcal{A}}=0$ in H1. Combining the two steps yields
+\eqref{eq:indcpa_bound}.
+
+%============================================================
+\section{Supplementary packet format and flow}
+\label{app:flow}
+
+This appendix gives a code-aligned summary of the packet layout and processing order.
+A packet is $\mathcal{P}=(\mathrm{hdr},\mathsf{wp},\mathrm{blocks},\tau)$ with
+$\mathrm{hdr}=(\texttt{ver},\texttt{kem\_epk},\texttt{salt},\nu,b_s,H,W,H_p,W_p)$.
+Associated data $\mathrm{AD}$ is formed in canonical order as in Eq.~\eqref{eq:ad_def} (including the
+fixed version string \texttt{ver}), and the tag is computed by Eq.~\eqref{eq:etm_tag}.
+The receiver enforces strict verify-then-decrypt: no unwrap and no inverse mapping are executed and no
+plaintext is released unless $\tau$ verifies.
+
+\subsection{Packet flow diagrams}
+
+Figures~\ref{fig:flow_sender_compact} and~\ref{fig:flow_receiver_compact} summarize sender- and
+receiver-side processing, emphasizing that authentication precedes parameter unwrapping and decryption.
+
+%---------------------------
+% Sender-side (compact)
+%---------------------------
+\begin{figure}[t]
+\centering
+\resizebox{0.98\linewidth}{!}{%
+\begin{tikzpicture}[
+  font=\scriptsize,
+  >=Latex,
+  node distance=4.0mm,
+  box/.style={rounded corners, draw, thick, align=left, inner sep=3.0pt, text width=0.86\linewidth},
+  io/.style={trapezium, trapezium left angle=70, trapezium right angle=110, draw, thick,
+             align=left, inner sep=3.0pt, text width=0.86\linewidth},
+  line/.style={->, thick}
+]
+\node[io] (in) {Input: $I\in\Zmod^{H\times W}$, $pk_B$, nonce $\nu$, block side $b_s$.};
+
+\node[box, below=of in] (kdf) {Key setup: X25519 $\rightarrow ss$; HKDF(ctx,\texttt{salt})
+$\rightarrow (K_{\mathrm{wrap}},K_{\mathrm{mac}},K_{\mathrm{str}})$; set \texttt{kem\_epk}.};
+
+\node[box, below=of kdf] (wrap) {Wrap params: sample $\Theta$; pack $\theta$; compute
+$\mathsf{wp}=\theta\oplus \mathrm{KS}_{\mathrm{wrap}}$.};
+
+\node[box, below=of wrap] (core) {Core encrypt:
+$J=\Phi_{\mathrm{pix},256}(I)$; $Q=\eta_{257}(J)$; $PF=\Phi_{\mathrm{aff},257}(Q)$;
+$R \leftarrow \mathrm{PRF}_{K_{\mathrm{str}}}(\nu)$; $C_{\mathrm{field}}=(PF+R)\bmod 257$.};
+
+\node[box, below=of core] (pkt) {Packetize \& tag:
+\texttt{blocks}$\leftarrow \mathrm{Blocks}(C_{\mathrm{field}},b_s)$ (uint16 LE);
+build $\mathrm{AD}$; $\tau=\mathrm{HMAC}_{K_{\mathrm{mac}}}(\mathrm{AD}\Vert \texttt{blocks})$.
+};
+
+\node[io, below=of pkt] (out) {Output: $\mathcal{P}=(\mathrm{hdr},\mathsf{wp},\mathrm{blocks},\tau)$
+with $\mathrm{hdr}=(\texttt{ver},\texttt{kem\_epk},\texttt{salt},\nu,b_s,H,W,H_p,W_p)$.};
+
+\draw[line] (in) -- (kdf);
+\draw[line] (kdf) -- (wrap);
+\draw[line] (wrap) -- (core);
+\draw[line] (core) -- (pkt);
+\draw[line] (pkt) -- (out);
+\end{tikzpicture}%
+}
+\vspace{1mm}
+\caption{Sender-side flow (encryption + packetization) summarized into key setup, parameter wrapping,
+core encryption, and EtM tagging}
+\label{fig:flow_sender_compact}
+\end{figure}
+
+%---------------------------
+% Receiver-side (compact)
+%---------------------------
+\begin{figure}[t]
+\centering
+\resizebox{0.98\linewidth}{!}{%
+\begin{tikzpicture}[
+  font=\scriptsize,
+  >=Latex,
+  node distance=4.0mm,
+  box/.style={rounded corners, draw, thick, align=left, inner sep=3.0pt, text width=0.86\linewidth},
+  io/.style={trapezium, trapezium left angle=70, trapezium right angle=110, draw, thick,
+             align=left, inner sep=3.0pt, text width=0.86\linewidth},
+  decision/.style={diamond, aspect=2.0, draw, thick, align=center, inner sep=1.2pt},
+  line/.style={->, thick}
+]
+
+\node[io] (in) {Input: $\mathcal{P}=(\mathrm{hdr},\mathsf{wp},\mathrm{blocks},\tau)$ and $(sk_B,pk_B)$.};
+
+\node[box, below=of in] (prep) {Parse \texttt{hdr}; derive $(K_{\mathrm{wrap}},K_{\mathrm{mac}},K_{\mathrm{str}})$ via X25519 + HKDF (same ctx).};
+
+\node[box, below=of prep] (ver) {Verify: rebuild $\mathrm{AD}$; recompute $\widehat{\tau}$ over $(\mathrm{AD},\texttt{blocks})$.};
+
+\node[decision, below=of ver] (ok) {$\widehat{\tau}=\tau$?};
+
+\node[box, text width=0.46\linewidth, left=5mm of ok] (rej)
+{\textbf{Reject (fail-closed)}\\No unwrap, no inverse mapping, no plaintext.};
+
+\node[box, below=of ok] (dec) {If yes: unwrap $\theta$ from $\mathsf{wp}$; decode $C_{\mathrm{field}}$; regenerate $R$; compute $PF=(C_{\mathrm{field}}-R)\bmod 257$; invert
+$\Phi_{\mathrm{aff},257}$ and $\eta_{257}$; invert $\Phi_{\mathrm{pix},256}$.};
+
+\node[io, below=of dec] (out) {Output: $\widehat{I}$ (bit-exact for accepted packets).};
+
+\draw[line] (in) -- (prep);
+\draw[line] (prep) -- (ver);
+\draw[line] (ver) -- (ok);
+\draw[line] (ok.west) -- node[above, font=\scriptsize]{no} (rej.east);
+\draw[line] (ok.south) -- node[right, font=\scriptsize]{yes} (dec.north);
+\draw[line] (dec) -- (out);
+\end{tikzpicture}%
+}
+\vspace{1mm}
+\caption{Receiver-side flow enforcing strict verify-then-decrypt: authenticate first, decrypt only on acceptance}
+\label{fig:flow_receiver_compact}
+\end{figure}
+
+%=====================================================
+\section{Test data, environment, and default settings}
+\label{app:setup}
+
+This appendix summarizes test data, execution environment, and default parameters used unless stated
+otherwise. We evaluate eight 8-bit grayscale images: six benchmarks from USC-SIPI and two medical
+samples (Table~\ref{tab:test_data_setup}). Sizes range from $256\times256$ to $1024\times1024$ and
+include a non-square case ($416\times596$). Default parameters fix $b_s=16$. All per-packet random
+parameters are sampled from a cryptographically secure source~\cite{SP800-90Ar1}. Runtime measurements
+use \texttt{runs=10} with \texttt{warmups=3}, reporting medians. Any phase time displayed as $0.0000$
+reflects reporting precision and measurement resolution.
+
+\begin{table}[t!]
+\centering
+\caption{Test images and resolutions (8-bit grayscale). The first six images are from USC-SIPI~\cite{USCSIPIMisc}}
+\label{tab:test_data_setup}
+{\scriptsize
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}l l c @{}}
+\hline
+\textbf{Image} & \textbf{Source} & \textbf{$H\times W$} \\
+\hline
+Aerial      & USC-SIPI & $256\times256$ \\
+Airplane    & USC-SIPI & $512\times512$ \\
+Airport     & USC-SIPI & $1024\times1024$ \\
+ChemPlant   & USC-SIPI & $256\times256$ \\
+Lena        & USC-SIPI & $512\times512$ \\
+Peppers     & USC-SIPI & $512\times512$ \\
+ChestXR     & Medical  & $416\times596$ \\
+IM000015    & Medical  & $800\times800$ \\
+\hline
+\end{tabular*}
+}
+\end{table}
+
+\begin{table}[t!]
+\centering
+\caption{Environment and default experimental settings}
+\label{tab:env_setup}
+{\scriptsize
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}l l @{}}
+\hline
+\textbf{Item} & \textbf{Setting} \\
+\hline
+OS         & Windows 11 (64-bit) \\
+CPU        & Intel Core Ultra 7 265K \\
+RAM        & 32\,GB DDR5-5600 \\
+Software   & Python 3.12; NumPy \\
+Block side & $b_s=16$ \\
+RNG        & CSPRNG~\cite{SP800-90Ar1} \\
+Timing     & \texttt{runs=10}, \texttt{warmups=3} (median) \\
+\hline
+\end{tabular*}
+}
+\end{table}
+
+%============================================================
+\section{Supplementary experimental results}
+\label{app:supp_tables}
+
+This appendix collects supplementary results referenced in Section~\ref{sec:results}.
+Notation follows Section~\ref{subsec:metrics}; in particular, $C_{\mathrm{field}}\in\Fpf^{H_p\times W_p}$
+denotes the transmitted prime-field ciphertext and $PF$ the corresponding pre-mask state.
+
+%------------------------------------------------------------
+\subsection{Integrity under active tampering}
+
+Figure~\ref{sfig:ChestXR_tamper} shows representative outcomes for \textit{ChestXR} under active tampering
+with strict verify-then-decrypt (\texttt{verify=True}): on authentication failure, the receiver rejects
+before any unwrap or inverse mapping.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{ChestXR_tamper_600dpi.png}%
+\caption{Representative tamper-rejection outcomes for \textit{ChestXR} under strict verify-then-decrypt (\texttt{verify=True})}
+\label{sfig:ChestXR_tamper}
+\end{figure}
+
+%------------------------------------------------------------
+\subsection{Empirical LoR distinguishability}
+\label{subsec:indcpa_empirical}
+
+Table~\ref{stab:indcpa_lr_nr_pf257} reports empirical LoR distinguishability under nonce-respecting
+trials (no nonce reuse). We report $\mathrm{Acc}$, $\mathrm{Adv}$, and AUC (Section~\ref{subsec:metrics_indcpa}), together with one-sided 99\% upper limits. These results are scoped to the specified histogram-template distinguisher family and complement (but do not replace) Appendix~\ref{snote:indcpa_proof}.
+
+
+\begin{table}[ht!]
+\centering
+\caption{Empirical LoR distinguishability under nonce-respecting trials (template histogram $\ell_1$ distinguisher)}
+
+\label{stab:indcpa_lr_nr_pf257}
+{\scriptsize
+\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}} l c c c c c @{}}
+\hline
+\textbf{Image} &
+\textbf{Acc} &
+\textbf{Adv} &
+\textbf{Acc$_{\mathrm{UL99}}$} &
+\textbf{Adv$_{\mathrm{UL99}}$} &
+\textbf{AUC} \\
+\hline
+Aerial        & 0.4966 & 0.0034 & 0.5148 & 0.0148 & 0.5014 \\
+Airplane      & 0.5044 & 0.0044 & 0.5226 & 0.0226 & 0.5085 \\
+Airport       & 0.4992 & 0.0008 & 0.5174 & 0.0174 & 0.5050 \\
+ChemPlant     & 0.5016 & 0.0016 & 0.5198 & 0.0198 & 0.4974 \\
+ChestXR       & 0.5002 & 0.0002 & 0.5184 & 0.0184 & 0.4966 \\
+IM000015      & 0.4950 & 0.0050 & 0.5132 & 0.0132 & 0.5007 \\
+Lena          & 0.5006 & 0.0006 & 0.5188 & 0.0188 & 0.4982 \\
+Peppers       & 0.4910 & 0.0090 & 0.5092 & 0.0092 & 0.4970 \\
+\hline
+\end{tabular*}
+}
+\end{table}
+
+%------------------------------------------------------------
+\subsection{Keystream randomness and stream separation}
+\label{subsec:keystream_randomness}
+
+Keystream quality is assessed with NIST SP~800--22, reporting pass rate and $p_{\mathrm{uni}}$ over
+$m{=}1000$ streams at $\alpha{=}0.01$ (Table~\ref{stab:nist_summary_sub}). Stream separation is quantified
+on the 9-bit field representation using $\mathrm{CR}_{9\text{-bit}}$ under (i) nonce variation and (ii) a
+one-bit perturbation of the masking key (Table~\ref{stab:cr_only_sub}).
+
+%------------------------------------------------------------
+% (a) NIST SP 800-22 summary (single-column)
+%------------------------------------------------------------
+\begin{table}[ht!]
+\centering
+\caption{NIST SP~800--22 summary ($m{=}1000$, $\alpha{=}0.01$) for the keystream. All listed tests satisfy the NIST acceptance criteria (Decision: OK)}
+\label{stab:nist_summary_sub}
+{\scriptsize
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}l
+                S[table-format=4.0]
+                S[table-format=7.0]
+                S[table-format=2.1]
+                S[table-format=1.4] @{}}
+\hline
+\textbf{Test} &
+\multicolumn{1}{c}{\textbf{Streams}} &
+\multicolumn{1}{c}{\textbf{Bits}} &
+\multicolumn{1}{c}{\textbf{Pass}(\%)} &
+\multicolumn{1}{c}{\textbf{$p_{\mathrm{uni}}$}} \\
+\hline
+monobit                  & 1000 & 1000000 & 99.2 & 0.9891 \\
+blockfreq ($M{=}128$)    & 1000 & 1000000 & 98.9 & 0.7299 \\
+runs                     & 1000 & 1000000 & 99.3 & 0.0159 \\
+cusum\_fwd               & 1000 & 1000000 & 99.0 & 0.8580 \\
+cusum\_bwd               & 1000 & 1000000 & 99.0 & 0.4846 \\
+longestrun ($M{=}10000$) & 1000 &  200000 & 99.1 & 0.0051 \\
+fft                      & 1000 &  131072 & 99.0 & 0.4905 \\
+\hline
+\end{tabular*}
+}
+\end{table}
+
+%------------------------------------------------------------
+% (b) Stream separation (single-column)
+%------------------------------------------------------------
+\begin{table}[ht!]
+\centering
+\caption{\texttt{field9} stream separation via $\mathrm{CR}_{9\text{-bit}}$.
+Across images, CR$_{\mathrm{nonce}}$ mean/min/max are $0.4454\!\pm\!0.0002$, $0.4447\!\pm\!0.0004$, $0.4460\!\pm\!0.0005$; CR$_{\mathrm{key}}$ is $0.4454\!\pm\!0.0002$}
+\label{stab:cr_only_sub}
+{\scriptsize
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}l
+    S[table-format=1.4]
+    S[table-format=1.4]
+    S[table-format=1.4]
+    S[table-format=1.4] @{}}
+\hline
+\textbf{Image} &
+\multicolumn{3}{c}{\textbf{CR$_{\mathrm{nonce}}$}} &
+\multicolumn{1}{c}{\textbf{CR$_{\mathrm{key}}$}} \\
+\cline{2-4}
+& \multicolumn{1}{c}{\textbf{mean}} &
+  \multicolumn{1}{c}{\textbf{min}} &
+  \multicolumn{1}{c}{\textbf{max}} &
+  \multicolumn{1}{c}{} \\
+\hline
+Aerial        & 0.4455 & 0.4441 & 0.4463 & 0.4456 \\
+Airplane      & 0.4454 & 0.4448 & 0.4459 & 0.4456 \\
+Airport       & 0.4452 & 0.4450 & 0.4454 & 0.4453 \\
+ChemPlant     & 0.4456 & 0.4444 & 0.4466 & 0.4457 \\
+ChestXR       & 0.4452 & 0.4449 & 0.4455 & 0.4453 \\
+IM000015      & 0.4452 & 0.4449 & 0.4454 & 0.4452 \\
+Lena          & 0.4454 & 0.4444 & 0.4462 & 0.4451 \\
+Peppers       & 0.4455 & 0.4450 & 0.4464 & 0.4452 \\
+\hline
+\end{tabular*}
+}
+\end{table}
+
+%------------------------------------------------------------
+\subsection{Differential sensitivity}
+\label{subsec:results_diff_supp}
+
+Tables~\ref{stab:diff_plaintext_field}--\ref{stab:diff_nonce} report NPCR, UACI, and AC (\%) under
+plaintext/key/nonce perturbations (computed on the 9-bit field representation unless noted), quantifying
+sensitivity of the transported representation under the stated perturbation models.
+
+
+%------------------------------------------------------------
+% (a) Plaintext (1 pixel): C_field (single-column)
+%------------------------------------------------------------
+\begin{table}[ht!]
+\centering
+\caption{Differential sensitivity (\%): plaintext (1 pixel) on \texttt{C\_field} (9-bit field)}
+\label{stab:diff_plaintext_field}
+{\scriptsize
+\begin{tabular*}{\columnwidth}{@{}l
+  S[table-format=2.4] S[table-format=2.4] S[table-format=2.4] @{}}
+\hline
+\textbf{Image} &
+\multicolumn{1}{c}{\textbf{NPCR}} &
+\multicolumn{1}{c}{\textbf{UACI}} &
+\multicolumn{1}{c}{\textbf{AC}} \\
+\hline
+Aerial        & 99.7107 & 33.3633 & 43.9551 \\
+Airplane      & 99.7935 & 33.1451 & 45.0338 \\
+Airport       & 99.7978 & 32.8537 & 43.9696 \\
+ChemPlant     & 99.7977 & 33.3699 & 42.9659 \\
+ChestXR       & 99.7824 & 33.8869 & 44.9884 \\
+IM000015      & 99.7668 & 33.9800 & 44.0729 \\
+Lena          & 99.6966 & 33.4431 & 44.7845 \\
+Peppers       & 99.7926 & 33.6372 & 45.1597 \\
+\hline
+\textbf{Mean$\pm$Std} &
+\multicolumn{1}{c}{\num{99.7673 +- 0.0407}} &
+\multicolumn{1}{c}{\num{33.4599 +- 0.3720}} &
+\multicolumn{1}{c}{\num{44.3662 +- 0.7569}} \\
+\hline
+\end{tabular*}
+}
+\end{table}
+
+%------------------------------------------------------------
+% (a) Plaintext (1 pixel): C_view (single-column)
+%------------------------------------------------------------
+\begin{table}[ht!]
+\centering
+\caption{Differential sensitivity (\%): plaintext (1 pixel) on \texttt{C\_view} (8-bit projection; view-only)}
+\label{stab:diff_plaintext_view}
+{\scriptsize
+\begin{tabular*}{\columnwidth}{@{}l
+  S[table-format=2.4] S[table-format=2.4] S[table-format=2.4] @{}}
+\hline
+\textbf{Image} &
+\multicolumn{1}{c}{\textbf{NPCR}} &
+\multicolumn{1}{c}{\textbf{UACI}} &
+\multicolumn{1}{c}{\textbf{AC}} \\
+\hline
+Aerial        & 99.7086 & 33.4913 & 49.3610 \\
+Airplane      & 99.7923 & 33.2721 & 50.5651 \\
+Airport       & 99.7948 & 32.9795 & 49.3641 \\
+ChemPlant     & 99.7961 & 33.4975 & 48.2369 \\
+ChestXR       & 99.7786 & 34.0167 & 50.5161 \\
+IM000015      & 99.7598 & 34.1101 & 49.4856 \\
+Lena          & 99.6934 & 33.5712 & 50.2809 \\
+Peppers       & 99.7915 & 33.7660 & 50.7086 \\
+\hline
+\textbf{Mean$\pm$Std} &
+\multicolumn{1}{c}{\num{99.7644 +- 0.0411}} &
+\multicolumn{1}{c}{\num{33.5881 +- 0.3734}} &
+\multicolumn{1}{c}{\num{49.8148 +- 0.8517}} \\
+\hline
+\end{tabular*}
+}
+\end{table}
+
+%------------------------------------------------------------
+% (b) Key (1 bit): seed16 (single-column)
+%------------------------------------------------------------
+\begin{table}[ht!]
+\centering
+\caption{Differential sensitivity (\%): key perturbation (1 bit) in \texttt{seed16} on \texttt{C\_field}}
+\label{stab:diff_key_seed16}
+{\scriptsize
+\begin{tabular*}{\columnwidth}{@{}l
+  S[table-format=2.4] S[table-format=2.4] S[table-format=2.4] @{}}
+\hline
+\textbf{Image} &
+\multicolumn{1}{c}{\textbf{NPCR}} &
+\multicolumn{1}{c}{\textbf{UACI}} &
+\multicolumn{1}{c}{\textbf{AC}} \\
+\hline
+Aerial        & 99.5514 & 33.4944 & 44.5441 \\
+Airplane      & 99.6143 & 33.5188 & 44.5271 \\
+Airport       & 99.6038 & 33.4620 & 44.5273 \\
+ChemPlant     & 99.6017 & 33.6242 & 44.4763 \\
+ChestXR       & 99.6351 & 33.4302 & 44.5047 \\
+IM000015      & 99.6167 & 33.4611 & 44.5507 \\
+Lena          & 99.6159 & 33.4217 & 44.5450 \\
+Peppers       & 99.5983 & 33.4705 & 44.5749 \\
+\hline
+\textbf{Mean$\pm$Std} &
+\multicolumn{1}{c}{\num{99.6047 +- 0.0244}} &
+\multicolumn{1}{c}{\num{33.4855 +- 0.0695}} &
+\multicolumn{1}{c}{\num{44.5312 +- 0.0335}} \\
+\hline
+\end{tabular*}
+}
+\end{table}
+
+%------------------------------------------------------------
+% (b) Key (1 bit): k32 (single-column)
+%------------------------------------------------------------
+\begin{table}[ht!]
+\centering
+\caption{Differential sensitivity (\%): key perturbation (1 bit) in \texttt{k32} on \texttt{C\_field}}
+\label{stab:diff_key_k32}
+{\scriptsize
+\begin{tabular*}{\columnwidth}{@{}l
+  S[table-format=2.4] S[table-format=2.4] S[table-format=2.4] @{}}
+\hline
+\textbf{Image} &
+\multicolumn{1}{c}{\textbf{NPCR}} &
+\multicolumn{1}{c}{\textbf{UACI}} &
+\multicolumn{1}{c}{\textbf{AC}} \\
+\hline
+Aerial        & 99.6170 & 33.4367 & 44.5652 \\
+Airplane      & 99.6288 & 33.4672 & 44.4946 \\
+Airport       & 99.6126 & 33.4673 & 44.5132 \\
+ChemPlant     & 99.6094 & 33.4722 & 44.5255 \\
+ChestXR       & 99.6232 & 33.4823 & 44.5009 \\
+IM000015      & 99.6086 & 33.4609 & 44.5247 \\
+Lena          & 99.6128 & 33.4794 & 44.5457 \\
+Peppers       & 99.6010 & 33.4749 & 44.5510 \\
+\hline
+\textbf{Mean$\pm$Std} &
+\multicolumn{1}{c}{\num{99.6142 +- 0.0094}} &
+\multicolumn{1}{c}{\num{33.4673 +- 0.0178}} &
+\multicolumn{1}{c}{\num{44.5270 +- 0.0263}} \\
+\hline
+\end{tabular*}
+}
+\end{table}
+
+%------------------------------------------------------------
+% (c) Nonce: nu -> nu+1 (already 4 cols; single-column)
+%------------------------------------------------------------
+\begin{table}[ht!]
+\centering
+\caption{Differential sensitivity (\%): nonce perturbation $\nu\rightarrow\nu+1$ on \texttt{C\_field}}
+\label{stab:diff_nonce}
+{\scriptsize
+\begin{tabular*}{\columnwidth}{@{}l
+  S[table-format=2.4] S[table-format=2.4] S[table-format=2.4] @{}}
+\hline
+\textbf{Image} &
+\multicolumn{1}{c}{\textbf{NPCR}} &
+\multicolumn{1}{c}{\textbf{UACI}} &
+\multicolumn{1}{c}{\textbf{AC}} \\
+\hline
+Aerial        & 99.6170 & 33.2011 & 44.5560 \\
+Airplane      & 99.6296 & 33.4360 & 44.5183 \\
+Airport       & 99.6032 & 33.4463 & 44.4972 \\
+ChemPlant     & 99.6475 & 33.5297 & 44.5253 \\
+ChestXR       & 99.5916 & 33.5290 & 44.5573 \\
+IM000015      & 99.6189 & 33.4877 & 44.5024 \\
+Lena          & 99.5937 & 33.3928 & 44.5359 \\
+Peppers       & 99.6098 & 33.4444 & 44.5271 \\
+\hline
+\textbf{Mean$\pm$Std} &
+\multicolumn{1}{c}{\num{99.6179 +- 0.0174}} &
+\multicolumn{1}{c}{\num{33.4339 +- 0.1045}} &
+\multicolumn{1}{c}{\num{44.5274 +- 0.0235}} \\
+\hline
+\end{tabular*}
+}
+\end{table}
+
+
+%------------------------------------------------------------
+\subsection{Field-domain histogram uniformity}
+\label{subsec:chi2_uniformity_app}
+
+Table~\ref{stab:chi2_uniformity_pf257} reports Pearson $\chi^2$ uniformity on $C_{\mathrm{field}}$ against
+the uniform distribution over $257$ symbols (df$=256$), computed by Eqs.~\eqref{eq:chi2_stat}--\eqref{eq:chi2_pval}.
+
+
+\begin{table}[ht!]
+\centering
+\caption{$\chi^2$ uniformity on $C_{\mathrm{field}}$ over $257$ symbols (df$=256$)}
+\label{stab:chi2_uniformity_pf257}
+{\scriptsize
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}l
+    S[table-format=1.4]
+    S[table-format=3.4]
+    S[table-format=1.4] @{}}
+\hline
+\textbf{Image} &
+\multicolumn{1}{c}{\textbf{$H_{257}(C)$}} &
+\multicolumn{1}{c}{\textbf{$\chi^2(C)$}} &
+\multicolumn{1}{c}{\textbf{$p_{\chi^2}$}} \\
+\hline
+Aerial     & 8.0032 & 223.8400 & 0.9273 \\
+Airplane   & 8.0049 & 267.4400 & 0.2989 \\
+Airport    & 8.0055 & 219.5900 & 0.9518 \\
+ChemPlant  & 8.0030 & 243.2200 & 0.7072 \\
+ChestXR    & 8.0048 & 265.7500 & 0.3246 \\
+IM000015   & 8.0054 & 227.7900 & 0.8973 \\
+Lena       & 8.0050 & 230.3500 & 0.8737 \\
+Peppers    & 8.0048 & 298.5300 & 0.0349 \\
+\hline
+\end{tabular*}
+}
+\end{table}
+
+
+%------------------------------------------------------------
+\subsection{Leakage surrogates and local entropy}
+\label{subsec:leakage_app}
+
+Table~\ref{stab:leakage_main} reports the permutation-controlled MI surrogate in compact form
+(Section~\ref{subsec:metrics_mi_local}). The corresponding joint/conditional entropies used by the estimator
+are listed in Table~\ref{stab:leakage_entropies}. Block-wise local entropy is summarized in
+Table~\ref{stab:local_entropy_sub}.
+
+%------------------------------------------------------------
+% MAIN (compact) MI table: no H_joint / H_cond columns
+%------------------------------------------------------------
+\begin{table}[ht!]
+\centering
+\caption{Leakage surrogate summary (MI baseline). Columns report MI, permutation baseline
+$(\mu_{\mathrm{perm}},\sigma_{\mathrm{perm}})$, and excess $MI^{+}= \max\{MI-\mu_{\mathrm{perm}},0\}$
+under the adopted estimator, together with the sample size $N_{\mathrm{used}}$}
+\label{stab:leakage_main}
+
+{\scriptsize
+% ---- (a) ----
+\begin{subtable}[t]{\columnwidth}
+\caption{\texttt{C\_view} ($L=256$): MI and permutation baseline (compact)}
+\label{stab:mi_z256_compact}
+\centering
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}l
+    S[table-format=1.4]
+    S[table-format=1.4]
+    S[table-format=1.4]
+    S[table-format=1.4]
+    S[table-format=6.0] @{}}
+\hline
+\textbf{Image} &
+\multicolumn{1}{c}{\textbf{$MI_{256}$}} &
+\multicolumn{1}{c}{\textbf{$\mu_{\mathrm{perm}}$}} &
+\multicolumn{1}{c}{\textbf{$\sigma_{\mathrm{perm}}$}} &
+\multicolumn{1}{c}{\textbf{$MI^{+}_{256}$}} &
+\multicolumn{1}{c}{\textbf{$N_{\mathrm{used}}$}} \\
+\hline
+Aerial     & 0.5613 & 0.5629 & 0.0020 & 0.0000 &  65536 \\
+Airplane   & 0.2028 & 0.2045 & 0.0014 & 0.0000 & 200000 \\
+Airport    & 0.1858 & 0.1845 & 0.0007 & 0.0013 & 200000 \\
+ChemPlant  & 0.5997 & 0.5981 & 0.0041 & 0.0017 &  65536 \\
+ChestXR    & 0.1328 & 0.1319 & 0.0009 & 0.0009 & 200000 \\
+IM000015   & 0.1792 & 0.1800 & 0.0008 & 0.0000 & 200000 \\
+Lena       & 0.1971 & 0.1967 & 0.0008 & 0.0004 & 200000 \\
+Peppers    & 0.2180 & 0.2193 & 0.0011 & 0.0000 & 200000 \\
+\hline
+\end{tabular*}
+\end{subtable}
+
+\vspace{0.35em}
+
+% ---- (b) ----
+\begin{subtable}[t]{\columnwidth}
+\caption{\texttt{C\_field} ($L=257$): MI and permutation baseline (compact)}
+\label{stab:mi_z257_compact}
+\centering
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}l
+    S[table-format=1.4]
+    S[table-format=1.4]
+    S[table-format=1.4]
+    S[table-format=1.4]
+    S[table-format=6.0] @{}}
+\hline
+\textbf{Image} &
+\multicolumn{1}{c}{\textbf{$MI_{257}$}} &
+\multicolumn{1}{c}{\textbf{$\mu_{\mathrm{perm}}$}} &
+\multicolumn{1}{c}{\textbf{$\sigma_{\mathrm{perm}}$}} &
+\multicolumn{1}{c}{\textbf{$MI^{+}_{257}$}} &
+\multicolumn{1}{c}{\textbf{$N_{\mathrm{used}}$}} \\
+\hline
+Aerial     & 0.5632 & 0.5656 & 0.0026 & 0.0000 &  65536 \\
+Airplane   & 0.2053 & 0.2056 & 0.0012 & 0.0000 & 200000 \\
+Airport    & 0.1875 & 0.1861 & 0.0007 & 0.0014 & 200000 \\
+ChemPlant  & 0.6022 & 0.6003 & 0.0030 & 0.0019 &  65536 \\
+ChestXR    & 0.1327 & 0.1326 & 0.0007 & 0.0002 & 200000 \\
+IM000015   & 0.1813 & 0.1811 & 0.0010 & 0.0002 & 200000 \\
+Lena       & 0.1964 & 0.1976 & 0.0012 & 0.0000 & 200000 \\
+Peppers    & 0.2189 & 0.2210 & 0.0013 & 0.0000 & 200000 \\
+\hline
+\end{tabular*}
+\end{subtable}
+}
+\end{table}
+
+%------------------------------------------------------------
+% SUPPLEMENT: entropies (H_joint, H_cond) moved to appendix table
+%------------------------------------------------------------
+\begin{table}[ht!]
+\centering
+\caption{Supplementary entropies used in MI computation. We report joint entropy
+$H_{\mathrm{joint},L}$ and conditional entropy $H_{\mathrm{cond},L}$ for $L\in\{256,257\}$
+(Section~\ref{subsec:metrics_mi_local})}
+\label{stab:leakage_entropies}
+
+{\scriptsize
+
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}l
+    S[table-format=2.4] S[table-format=1.4]
+    S[table-format=2.4] S[table-format=1.4] @{}}
+\hline
+\textbf{Image} &
+\multicolumn{2}{c}{\textbf{\texttt{C\_view} ($L=256$)}} &
+\multicolumn{2}{c}{\textbf{\texttt{C\_field} ($L=257$)}} \\
+\cline{2-5}
+& \multicolumn{1}{c}{\textbf{$H_{\mathrm{joint},256}$}} &
+  \multicolumn{1}{c}{\textbf{$H_{\mathrm{cond},256}$}} &
+  \multicolumn{1}{c}{\textbf{$H_{\mathrm{joint},257}$}} &
+  \multicolumn{1}{c}{\textbf{$H_{\mathrm{cond},257}$}} \\
+\hline
+Aerial     & 14.7458 & 7.4339 & 14.7515 & 7.4397 \\
+Airplane   & 14.4998 & 7.7944 & 14.4999 & 7.7993 \\
+Airport    & 14.6422 & 7.8115 & 14.6494 & 7.8173 \\
+ChemPlant  & 14.7377 & 7.3952 & 14.7434 & 7.4010 \\
+ChestXR    & 13.7190 & 7.8644 & 13.7297 & 7.8721 \\
+IM000015   & 12.1878 & 7.8177 & 12.1913 & 7.8234 \\
+Lena       & 15.2445 & 7.8000 & 15.2528 & 7.8082 \\
+Peppers    & 15.3723 & 7.7789 & 15.3788 & 7.7857 \\
+\hline
+\end{tabular*}
+}
+\end{table}
+
+%------------------------------------------------------------
+% Local entropy stays as-is (separate table; compact already)
+%------------------------------------------------------------
+\begin{table}[ht!]
+\centering
+\caption{Local entropy (block-wise mean$\pm$std)}
+\label{stab:local_entropy_sub}
+
+{\scriptsize
+
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}l c c c @{}}
+\hline
+\textbf{Image} &
+$\overline{H}_{\mathrm{local}}(I)$ &
+$\overline{H}_{\mathrm{local}}(\texttt{C\_view})$ &
+$\overline{H}_{\mathrm{local}}(\texttt{C\_field})$ \\
+\hline
+Aerial     & $6.2773\!\pm\!0.4113$ & $7.1765\!\pm\!0.0527$ & $7.1811\!\pm\!0.0527$ \\
+Airplane   & $4.5603\!\pm\!1.3396$ & $7.1710\!\pm\!0.0510$ & $7.1753\!\pm\!0.0509$ \\
+Airport    & $5.4030\!\pm\!0.7371$ & $7.1740\!\pm\!0.0521$ & $7.1785\!\pm\!0.0521$ \\
+ChemPlant  & $5.8805\!\pm\!0.6331$ & $7.1776\!\pm\!0.0503$ & $7.1826\!\pm\!0.0502$ \\
+ChestXR    & $2.8535\!\pm\!0.9215$ & $7.1721\!\pm\!0.0543$ & $7.1763\!\pm\!0.0538$ \\
+IM000015   & $2.7262\!\pm\!2.7821$ & $7.1721\!\pm\!0.0525$ & $7.1767\!\pm\!0.0525$ \\
+Lena       & $4.9885\!\pm\!0.9667$ & $7.1744\!\pm\!0.0529$ & $7.1790\!\pm\!0.0527$ \\
+Peppers    & $5.1053\!\pm\!0.8571$ & $7.1730\!\pm\!0.0517$ & $7.1773\!\pm\!0.0515$ \\
+\hline
+\end{tabular*}
+}
+\end{table}
+
+
+%------------------------------------------------------------
+\subsection{Ablation and compressibility}
+
+Table~\ref{stab:exp09_ablation_summary} summarizes representation-level ablations and compressibility
+ratios. States follow the main notation: $P\equiv I$, $S\equiv J$, $Q$, $PF$, and $C_{\mathrm{field}}$.
+For visualization/compressibility only, 8-bit views use $\pi(v)=\min(v,255)$. Reported values should be
+interpreted as properties of the respective intermediate and transported representations under the stated
+mappings and views.
+
+\begin{table}[ht!]
+\centering
+\caption{Compact ablation summary over $n{=}8$ images (mean$\pm$std). For 8-bit views (top),
+$\overline{|\rho|}$ denotes mean absolute neighbor correlation on the view. The 256-level $\chi^2$ uniformity term is omitted for views (it is consistently negligible under the stated setup). For native $\Fpf$ states (bottom), $p_{\min}$ is the worst-case 257-ary $\chi^2$ p-value across images}
+\label{stab:exp09_ablation_summary}
+
+{\scriptsize
+
+% ---- (a) views in Z_256 ----
+\begin{subtable}[t]{\columnwidth}
+\caption{Byte-domain 8-bit views in $\Zmod$ ($\pi(\cdot)$ applied where relevant)}
+\label{stab:exp09_ablate_views_1col}
+\centering
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}} l c c c c @{}}
+\hline
+\textbf{State} &
+\textbf{$H_{256}$} &
+\textbf{$\overline{|\rho|}$} &
+\textbf{$R_{\mathrm{PNG}}$} &
+\textbf{$R_{\mathrm{GZIP}}$} \\
+\hline
+$P$               & $6.6816\pm1.0885$ & 0.9526 & $0.5722\pm0.1573$ & $0.7357\pm0.2089$ \\
+$S$               & $7.9987\pm0.0009$ & 0.0054 & $0.9707\pm0.0891$ & $0.9754\pm0.0703$ \\
+$Q_{\mathrm{view}}$  & $7.9963\pm0.0013$ & 0.0024 & $0.9948\pm0.0257$ & $0.9882\pm0.0351$ \\
+$PF_{\mathrm{view}}$ & $7.9964\pm0.0012$ & 0.0012 & $1.0038\pm0.0013$ & $1.0004\pm0.0001$ \\
+$C_{\mathrm{view}}$  & $7.9962\pm0.0013$ & 0.0012 & $1.0037\pm0.0012$ & $1.0004\pm0.0001$ \\
+\hline
+\end{tabular*}
+\end{subtable}
+
+\vspace{0.35em}
+
+% ---- (b) native states in F_257 ----
+\begin{subtable}[t]{\columnwidth}
+\caption{Native prime-field states in $\Fpf$}
+\label{stab:exp09_ablate_pf257_1col}
+\centering
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}} l c c @{}}
+\hline
+\textbf{State} &
+\textbf{$H_{257}$} &
+\textbf{$p_{\min}$} \\
+\hline
+$Q$               & $8.0040\pm0.0010$ & $\approx 0$ \\
+$PF$              & $8.0042\pm0.0011$ & 0.0196 \\
+$C_{\mathrm{field}}$ & $8.0048\pm0.0010$ & 0.1210 \\
+\hline
+\end{tabular*}
+\end{subtable}
+}
+\end{table}
+
+
+%------------------------------------------------------------
+\subsection{Streaming evaluation}
+
+Table~\ref{stab:stream_integrity_s12} reports inter-frame divergence (HD\%), nonce uniqueness, and replay
+blocking under the adopted nonce-cache policy. Here $F$ is the number of frames per image, $R$ the repeats
+per frame, and $\delta$ the per-frame perturbation rate.
+
+
+\begin{table}[ht!]
+\centering
+\caption{Streaming evaluation (HD\%, nonce uniqueness, replay blocking)}
+\label{stab:stream_integrity_s12}
+
+{\scriptsize
+
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}} l c c c c c c @{}}
+\hline
+\textbf{Image} &
+\textbf{$F$} &
+\textbf{$R$} &
+\textbf{$\delta$} &
+\textbf{HD\% (mean$\pm$std)} &
+\textbf{Coll.} &
+\textbf{Replay} \\
+\hline
+Aerial        & 32 & 3 & 0.0100 & $50.0043\pm0.0667$ & 0 & Yes \\
+Airplane      & 32 & 3 & 0.0100 & $50.0016\pm0.0287$ & 0 & Yes \\
+Airport       & 32 & 3 & 0.0100 & $50.0012\pm0.0178$ & 0 & Yes \\
+ChemPlant     & 32 & 3 & 0.0100 & $50.0007\pm0.0680$ & 0 & Yes \\
+ChestXR       & 32 & 3 & 0.0100 & $49.9947\pm0.0362$ & 0 & Yes \\
+IM000015      & 32 & 3 & 0.0100 & $50.0012\pm0.0233$ & 0 & Yes \\
+Lena          & 32 & 3 & 0.0100 & $50.0020\pm0.0368$ & 0 & Yes \\
+Peppers       & 32 & 3 & 0.0100 & $50.0016\pm0.0351$ & 0 & Yes \\
+\hline
+\multicolumn{7}{@{}l@{}}\textit{All cases: unique nonces $=FR=96$ and collisions $=0$.}\\
+\hline
+\end{tabular*}
+}
+\end{table}
+
+
+%------------------------------------------------------------
+\subsection{Performance breakdown}
+
+Tables~\ref{stab:perf_e2e_sub} and~\ref{stab:perf_phase_time_subb} report median end-to-end and phase
+times under Appendix~\ref{app:setup}. Tables~\ref{stab:perf_phase_bw_u8eq}--\ref{stab:perf_phase_bw_field}
+report phase throughputs under u8/u8eq and field-byte conventions. Under the adopted packet format,
+masking and serialization dominate end-to-end runtime in the reported implementation.
+
+
+% ---- (a) End-to-end (single-column) ----
+\begin{table}[ht!]
+\centering
+\caption{End-to-end times (ms) and encryption throughput (median; PF257)}
+\label{stab:perf_e2e_sub}
+
+{\scriptsize
+
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}} l
+                S[table-format=3.4]
+                S[table-format=3.4]
+                S[table-format=3.4]
+                S[table-format=1.4]
+                S[table-format=1.4] @{}}
+\hline
+\textbf{Image} &
+\multicolumn{1}{c}{$t^{\mathrm{enc}}_{\mathrm{E2E}}$} &
+\multicolumn{1}{c}{$t^{\mathrm{dec}}_{\mathrm{verify}}$} &
+\multicolumn{1}{c}{$t^{\mathrm{dec}}_{\mathrm{no\_verify}}$} &
+\multicolumn{1}{c}{$t_{\mathrm{EtM}}$} &
+\multicolumn{1}{c}{\shortstack{$\mathrm{MB/s}_{\mathrm{enc}}$\\[-2pt](u8eq)}} \\
+\hline
+Aerial        &  19.8336 &  19.7720 &  20.2400 & 0.0000 & 3.1512 \\
+Airplane      &  84.1481 &  84.6762 &  82.1257 & 2.5506 & 2.9710 \\
+Airport       & 329.2523 & 320.2918 & 319.3222 & 0.9696 & 3.0372 \\
+ChemPlant     &  19.0731 &  19.6137 &  19.4593 & 0.1544 & 3.2769 \\
+ChestXR       &  76.8148 &  75.5326 &  75.7087 & 0.0000 & 3.0782 \\
+IM000015      & 197.4671 & 192.2966 & 192.0476 & 0.2490 & 3.0909 \\
+Lena          &  82.7519 &  80.1368 &  80.2570 & 0.0000 & 3.0211 \\
+Peppers       &  80.6765 &  82.4217 &  81.0071 & 1.4146 & 3.0988 \\
+\hline
+\end{tabular*}
+}
+\end{table}
+
+% ---- (b) Phase times (single-column) ----
+\begin{table}[ht!]
+\centering
+\caption{Encryption phase times (ms; median; PF257)}
+\label{stab:perf_phase_time_subb}
+
+{\scriptsize
+
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}} l
+                S[table-format=2.4]
+                S[table-format=1.4]
+                S[table-format=3.4]
+                S[table-format=2.4] @{}}
+\hline
+\textbf{Image} &
+$t_{\mathrm{pixel}}$ &
+$t_{\mathrm{mix}}$ &
+$t_{\mathrm{mask}}$ &
+$t_{\mathrm{overhead}}$ \\
+\hline
+Aerial        &  1.3165 & 0.4350 &  17.6971 & 0.3851 \\
+Airplane      &  6.9295 & 2.3892 &  69.6213 & 5.2082 \\
+Airport       & 27.6292 & 9.5011 & 273.5774 & 18.5446 \\
+ChemPlant     &  1.1800 & 0.4152 &  16.7651 & 0.7129 \\
+ChestXR       &  6.5243 & 2.2398 &  68.0073 & 0.0435 \\
+IM000015      & 16.6731 & 5.9722 & 170.3794 & 4.4424 \\
+Lena          &  6.8767 & 2.3639 &  69.6748 & 3.8365 \\
+Peppers       &  6.9290 & 2.2825 &  71.0089 & 0.4561 \\
+\hline
+\end{tabular*}
+}
+\end{table}
+
+% ---- (c1) Phase throughput (u8 / u8eq) ----
+\begin{table}[ht!]
+\centering
+\caption{Phase throughput (MB/s; u8/u8eq)}
+\label{stab:perf_phase_bw_u8eq}
+
+{\scriptsize
+
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}} l
+                S[table-format=2.4]
+                S[table-format=3.4]
+                S[table-format=1.4] @{}}
+\hline
+\textbf{Image} &
+\multicolumn{1}{c}{\shortstack{$\mathrm{MB/s}_{\mathrm{pixel}}$\\[-2pt](u8)}} &
+\multicolumn{1}{c}{\shortstack{$\mathrm{MB/s}_{\mathrm{mix}}$\\[-2pt](u8eq)}} &
+\multicolumn{1}{c}{\shortstack{$\mathrm{MB/s}_{\mathrm{mask}}$\\[-2pt](u8eq)}} \\
+\hline
+Aerial        & 47.4744 & 143.6947 & 3.5317 \\
+Airplane      & 36.0776 & 104.6397 & 3.5909 \\
+Airport       & 36.1936 & 105.2510 & 3.6553 \\
+ChemPlant     & 52.9661 & 150.5480 & 3.7280 \\
+ChestXR       & 36.2417 & 107.6931 & 3.5468 \\
+IM000015      & 36.6070 & 102.1988 & 3.5823 \\
+Lena          & 36.3546 & 105.7574 & 3.5881 \\
+Peppers       & 36.0802 & 109.5290 & 3.5207 \\
+\hline
+\end{tabular*}
+}
+\end{table}
+
+% ---- (c2) Phase throughput (field-bytes) ----
+\begin{table}[ht!]
+\centering
+\caption{Phase throughput (MB/s; field-bytes)}
+\label{stab:perf_phase_bw_field}
+
+{\scriptsize
+
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}} l
+                S[table-format=3.4]
+                S[table-format=1.4] @{}}
+\hline
+\textbf{Image} &
+\multicolumn{1}{c}{\shortstack{$\mathrm{MB/s}_{\mathrm{mix}}$\\[-2pt](field-bytes)}} &
+\multicolumn{1}{c}{\shortstack{$\mathrm{MB/s}_{\mathrm{mask}}$\\[-2pt](field-bytes)}} \\
+\hline
+Aerial        & 287.3894 & 7.0633 \\
+Airplane      & 209.2795 & 7.1817 \\
+Airport       & 210.5019 & 7.3105 \\
+ChemPlant     & 301.0960 & 7.4560 \\
+ChestXR       & 215.3861 & 7.0937 \\
+IM000015      & 204.3976 & 7.1646 \\
+Lena          & 211.5149 & 7.1762 \\
+Peppers       & 219.0581 & 7.0414 \\
+\hline
+\end{tabular*}
+}
+\end{table}
+
+
+%------------------------------------------------------------
+\subsection{Throughput comparison and scheme summary}
+
+Packet-compatible AEAD baselines (AES-GCM and ChaCha20-Poly1305) are evaluated under the same transport
+envelope: identical header fields, canonical $\mathrm{AD}$, serialization rules, and verify-then-decrypt
+acceptance policy; only the payload-protection mechanism differs. For PF257, the payload is serialized
+uint16 prime-field ciphertext blocks authenticated by EtM with a 32-byte HMAC-SHA256 tag. For AEAD, the
+payload is byte-oriented ciphertext with a 16-byte AEAD tag stored in the packet tag field. To keep the
+envelope identical, AEAD derives an encryption key from the same per-packet shared secret and
+\texttt{salt}:
+\[
+K_{\mathrm{aead}} \leftarrow \mathrm{HKDF}(ss,\texttt{salt},\texttt{"AEADKEY|"}\Vert\mathrm{ctx},32).
+\]
+This key is used only for baseline experiments and is not part of the proposed protocol.
+
+Throughput is reported under (i) u8-equivalent normalization $B_{\mathrm{u8eq}}/t_{\mathrm{enc}}$ and
+(ii) wire throughput $|\mathrm{SER}(\mathcal{P})|/t_{\mathrm{enc}}$, where $\mathrm{SER}(\mathcal{P})=\mathrm{AD}\Vert\texttt{blocks}\Vert\tau$ under the canonical field encodings (so it accounts for header/metadata and wrapped parameters via $\mathrm{AD}$, plus payload blocks and tag). We also report
+$\rho_w \triangleq |\mathrm{SER}(\mathcal{P})|/B_{\mathrm{u8eq}}$.
+Table~\ref{stab:exp11_scheme_summary} reports dataset means. Because PF257 transmits uint16 prime-field
+blocks, it yields $\rho_w\approx 2$, whereas AEAD baselines remain byte-oriented with $\rho_w\approx 1$.
+Under active-tampering trials, all schemes produced zero false accepts; with $N=64{,}512$ adversarial
+packets per scheme, the 99\% Wilson UL on the false-accept probability is $1.03\times 10^{-4}$.
+
+
+\begin{table}[ht!]
+\centering
+\caption{Packet-compatible throughput comparison (mean over 8 images; MB/s). Reported packet sizes include header, wrapped parameters, ciphertext blocks, and tag}
+\label{stab:exp11_scheme_summary}
+{\scriptsize
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}} l
+    S[table-format=2.0]
+    S[table-format=3.2]
+    S[table-format=1.3]
+    S[table-format=4.2]
+    S[table-format=4.2] @{}}
+\hline
+\textbf{Scheme} &
+\textbf{TagB} &
+\textbf{PktKB} &
+\textbf{$\rho_w$} &
+\multicolumn{1}{c}{\shortstack{\textbf{MB/s}\\[-3pt]\textbf{(u8eq)}}} &
+\multicolumn{1}{c}{\shortstack{\textbf{MB/s}\\[-3pt]\textbf{(wire)}}} \\
+\hline
+AES-GCM           & 16 & 256.23 & 1.013 & 1095.50   & 1111.70 \\
+ChaCha20-Poly1305 & 16 & 256.23 & 1.013 &  902.26 &  913.96 \\
+Proposed (PF257)  & 32 & 512.25 & 2.000 &    3.13 &    6.27 \\
+\hline
+\end{tabular*}
+}
+\end{table}
+
+
+%============================================================
+% End appendix
+%============================================================
+
+%\input{flow.tex}
